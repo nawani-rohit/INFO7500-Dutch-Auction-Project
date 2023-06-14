@@ -1,11 +1,11 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: ISC
 pragma solidity ^0.8.9;
 
 import "@openzeppelin/contracts/interfaces/IERC721.sol";
 import "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 contract NFTDutchAuctionERC20Bids {
-    address payable public immutable owner;
+    address payable public immutable auctionOwner;
 
     address public immutable erc721TokenAddress;
     address public immutable erc20TokenAddress;
@@ -18,7 +18,7 @@ contract NFTDutchAuctionERC20Bids {
     IERC20 internal immutable tmpToken;
     uint256 public immutable startBlock;
     uint256 public immutable initialPrice;
-    address public winner;
+    address public auctionWinner;
 
     constructor(
         address _erc20TokenAddress,
@@ -28,7 +28,7 @@ contract NFTDutchAuctionERC20Bids {
         uint256 _numBlocksAuctionOpen,
         uint256 _offerPriceDecrement
     ) {
-        owner = payable(msg.sender);
+        auctionOwner = payable(msg.sender);
 
         erc20TokenAddress = _erc20TokenAddress;
         erc721TokenAddress = _erc721TokenAddress;
@@ -41,7 +41,7 @@ contract NFTDutchAuctionERC20Bids {
         tmpToken = IERC20(erc20TokenAddress);
 
         require(
-            nft.ownerOf(_nftTokenId) == owner,
+            nft.ownerOf(_nftTokenId) == auctionOwner,
             "The NFT tokenId does not belong to the Auction's Owner"
         );
 
@@ -51,7 +51,6 @@ contract NFTDutchAuctionERC20Bids {
             (numBlocksAuctionOpen * offerPriceDecrement);
     }
 
-    //Calculate the current accepted price as per dutch auction rules
     function getCurrentPrice() public view returns (uint256) {
         uint256 blocksElapsed = block.number - startBlock;
         if (blocksElapsed >= numBlocksAuctionOpen) {
@@ -62,34 +61,26 @@ contract NFTDutchAuctionERC20Bids {
     }
 
     function bid(uint256 bidAmount) external returns (address) {
-        //Throw error if auction has already been won
-        require(winner == address(0), "Auction has already concluded");
+        require(auctionWinner == address(0), "Auction has already ended.");
 
-        //Throw error if auction has expired already
         require(
             (block.number - startBlock) <= numBlocksAuctionOpen,
-            "Auction expired"
+            "Auction expired."
         );
 
-        //Get the current accepted price as per dutch auction rules
         uint256 currentPrice = getCurrentPrice();
-        //Throw error if the wei value sent is less than the current accepted price
         require(
             bidAmount >= currentPrice,
-            "The bid amount sent is not acceptable"
+            "The bid amount sent is not acceptable."
         );
-        //Check if the bidder has bidAmount in their account
         require(
             bidAmount <= tmpToken.allowance(msg.sender, address(this)),
-            "Bid amount was accepted, but bid failed as not enough balance/allowance to transfer erc20 token TMP"
+            "Bid failed due to not enough balance/allowance to transfer erc20 token BNB."
         );
-        //Set the bidder as winner
-        //Transfer the NFT to bidder
-        //Transfer the bid amount erc20 to owner
-        winner = msg.sender;
-        tmpToken.transferFrom(winner, owner, bidAmount);
-        nft.transferFrom(owner, winner, nftTokenId);
+        auctionWinner = msg.sender;
+        tmpToken.transferFrom(auctionWinner, auctionOwner, bidAmount);
+        nft.transferFrom(auctionOwner, auctionWinner, nftTokenId);
 
-        return winner;
+        return auctionWinner;
     }
 }
